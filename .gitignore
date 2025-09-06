@@ -1,0 +1,78 @@
+# 🐍 Python artifacts
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.sqlite3
+*.db
+
+# 📦 Virtual environments
+.venv/
+venv/
+ENV/
+env/
+*.egg-info/
+
+# 🔐 Secrets and environment files
+.env
+*.key
+*.pem
+*.crt
+
+# 📊 Logs and outputs
+*.log
+*.out
+*.tmp
+
+# 📁 OS-specific files
+.DS_Store
+Thumbs.db
+
+# 📦 Package managers
+pip-wheel-metadata/
+site-packages/
+
+# 📂 VS Code settings
+.vscode/
+.history/
+
+# 📊 Streamlit cache
+.streamlit/
+
+# 📦 DVC and MLflow artifacts
+dvc.lock
+.dvc/
+mlruns/
+mlartifacts/
+
+# 📁 Model folders (if generated)
+models/
+checkpoints/
+saved_models/
+
+# 📦 Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# 📁 Data folders (optional—customize as needed)
+data/
+datasets/
+*.csv
+*.tsv
+*.xlsx
+
+# 🚀 Deployment artifacts
+Dockerfile
+*.dockerignore
+*.tar.gz
+*.whl
+
+# 🧪 Test outputs
+htmlcov/
+coverage.xml
+*.cover
+*.coverage
+
+# 🧠 Misc
+*.bak
+*.swp
+*.swo

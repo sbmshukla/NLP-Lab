@@ -40,13 +40,15 @@ site-packages/
 .streamlit/
 
 # 📦 DVC and MLflow artifacts
-dvc.lock
-.dvc/
+# dvc.lock
+# .dvc/
 mlruns/
 mlartifacts/
 
 # 📁 Model folders (if generated)
-models/
+#models/
+notebooks/
+datasets/
 checkpoints/
 saved_models/
 
@@ -76,3 +78,5 @@ coverage.xml
 *.bak
 *.swp
 *.swo
+/models
+/datasets

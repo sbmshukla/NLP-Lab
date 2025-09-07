@@ -23,6 +23,7 @@ NLP-Lab/
 ├── app.py                      # Streamlit frontend
 ├── manager/
 │   └── bucketmanager.py        # S3 model manager
+│   └── localpusher.py          # Push local data to S3 bucket
 ├── nlplab/
 │   ├── prediction_pipeline/    # Custom prediction logic
 │   ├── exception/              # Error handling

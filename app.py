@@ -3,7 +3,7 @@ import joblib
 import numpy as np
 import streamlit as st
 import plotly.graph_objects as go
-from dotenv import load_dotenv
+import nltk
 
 # ---- YOUR OWN MODULES ----
 from nlplab.prediction_pipeline.prediction_pipeline import PredictionPipeline
@@ -11,11 +11,25 @@ from nlplab.loggin.logger import logging
 from nlplab.exception.exception import handle_exception
 from manager.bucketmanager import S3ModelManager
 
+
+# ======================
+# 0. Ensure NLTK resources
+# ======================
+@st.cache_resource
+def ensure_nltk():
+    for r in ["wordnet", "omw-1.4", "stopwords"]:
+        try:
+            nltk.data.find(f"corpora/{r}")
+        except LookupError:
+            nltk.download(r, quiet=True)
+
+
+ensure_nltk()
+
 # ======================
 # 1. Environment / Manager
 # ======================
-load_dotenv()
-
+# Populate os.environ from Streamlit secrets
 for k, v in st.secrets.items():
     os.environ[k] = str(v)
 
@@ -26,9 +40,9 @@ s3_manager = S3ModelManager(
     bucket_name=os.getenv("AWS_S3_BUCKET_NAME"),
 )
 
-deployment_status = os.getenv("DEPLOYMENT_STATUS")  # "True" or "False"
+deployment_status = str(os.getenv("DEPLOYMENT_STATUS", "False")).lower() == "true"
 
-# keep logs visible in UI
+# Initialize UI log
 if "logs" not in st.session_state:
     st.session_state.logs = []
 
@@ -37,9 +51,6 @@ def ui_log(message):
     """Write to both Python logger and UI debug panel."""
     logging.info(message)
     st.session_state.logs.append(message)
-
-
-ui_log(f"Deploy Status{deployment_status}")
 
 
 # ======================
@@ -57,13 +68,8 @@ def load_model(model_path):
 
 
 def get_model(s3_key, model_dir="models"):
-    """
-    - Deployment (DEPLOYMENT_STATUS == "True"): always pull in-memory
-    - Dev mode: reuse local file or download
-    """
-    is_deploy = str(deployment_status).lower() == "true"
-
-    if is_deploy:
+    """Load model based on deployment mode."""
+    if deployment_status:
         ui_log("🌐 Deployment mode → pulling directly from S3 (in-memory)")
         try:
             model = s3_manager.pull_model_in_memory(s3_key=s3_key)
@@ -76,8 +82,10 @@ def get_model(s3_key, model_dir="models"):
             st.exception(e)
             return None
 
-    # ------- LOCAL / DEV MODE -------
+    # Local/dev mode
     local_model_path = os.path.join(model_dir, os.path.basename(s3_key))
+    os.makedirs(model_dir, exist_ok=True)
+
     if os.path.exists(local_model_path):
         ui_log(f"✅ Found locally: {local_model_path}")
         return load_model(local_model_path)
@@ -142,15 +150,16 @@ def cached_get_model(s3_key):
 
 
 def clear_model_cache():
+    """Clear model cache and reset logs."""
     _cached_model_loader.clear()
-    ui_log("🔄 Cleared model cache")
+    st.session_state.logs = []
+    ui_log("🔄 Cleared model cache and reset logs")
 
 
 # ======================
 # 4. Streamlit UI
 # ======================
 logging.info("App Started")
-
 st.set_page_config(page_title="🧪 NLP LAB", layout="wide", page_icon="🧠")
 st.markdown("<h2 style='text-align:center;'>💻 NLP LAB</h2>", unsafe_allow_html=True)
 st.markdown("---")
@@ -190,11 +199,9 @@ if task == "Spam Detection":
                     prediction = None
 
                 if prediction:
-                    result = prediction[0][0]  # predicted label
+                    result = prediction[0][0]
                     ham_percent = np.round(prediction[1][0][0] * 100, 5)
                     spam_percent = np.round(prediction[1][0][1] * 100, 5)
-
-                    # ui_log(f"ham_percent: {ham_percent}, spam_percent: {spam_percent}")
 
                     if result == 1:
                         st.error("⚠️ Warning: Maybe It's Spam")

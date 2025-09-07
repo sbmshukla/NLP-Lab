@@ -18,6 +18,8 @@ s3_manager = S3ModelManager(
     bucket_name=os.getenv("AWS_S3_BUCKET_NAME"),
 )
 
+deployment_status = os.getenv("DEPLOYMENT_STATUS")
+
 
 def get_model(s3_key, model_dir="models"):
     local_model_path = os.path.join(model_dir, os.path.basename(s3_key))
@@ -25,8 +27,11 @@ def get_model(s3_key, model_dir="models"):
     with st.spinner("🔄 Loading model..."):
         if not os.path.exists(local_model_path):
             st.info(f"⬇️ Model not found locally. Downloading: `{s3_key}`")
-            s3_manager.pull_model(s3_key=s3_key, local_model_path=local_model_path)
-            s3_manager.manage_local_models(model_dir=model_dir)
+            if deployment_status == "True":
+                model = s3_manager.pull_model_in_memory(s3_key=s3_key)
+            else:
+                s3_manager.pull_model(s3_key=s3_key, local_model_path=local_model_path)
+                s3_manager.manage_local_models(model_dir=model_dir)
         else:
             # st.success(f"✅ Model already exists: `{local_model_path}`")
             pass

@@ -4,11 +4,25 @@ from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 from nlplab.loggin.logger import logging
 import nltk
+import streamlit as st
+import nltk
 
-try:
-    nltk.data.find("corpora/stopwords")
-except LookupError:
-    nltk.download("stopwords")
+
+@st.cache_resource
+def ensure_nltk():
+    for r in ["wordnet", "omw-1.4", "stopwords"]:
+        try:
+            nltk.data.find(f"corpora/{r}")
+        except LookupError:
+            nltk.download(r, quiet=True)
+    return True
+
+
+ensure_nltk()
+# try:
+#     nltk.data.find("corpora/stopwords")
+# except LookupError:
+#     nltk.download("stopwords")
 
 lemmatizer = WordNetLemmatizer()
 stop_words = set(stopwords.words("english"))

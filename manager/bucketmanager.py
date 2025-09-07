@@ -19,6 +19,18 @@ class S3ModelManager:
             region_name=region,
         )
 
+    def pull_model_in_memory(self, s3_key):
+        """Download model from S3 and load directly into memory"""
+        try:
+            response = self.s3.get_object(Bucket=self.bucket_name, Key=s3_key)
+            model_bytes = response["Body"].read()
+            model = joblib.load(io.BytesIO(model_bytes))
+            print(f"✅ Model loaded directly from S3 into memory: {s3_key}")
+            return model
+        except Exception as e:
+            print(f"❌ Failed to load model from S3 into memory: {e}")
+            return None
+
     def push_model(self, local_model_path, s3_key=None):
         """Upload model to S3"""
         if not s3_key:

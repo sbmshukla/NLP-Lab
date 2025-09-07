@@ -2,7 +2,10 @@ import streamlit as st
 import joblib
 import os
 from nlplab.prediction_pipeline.prediction_pipeline import PredictionPipeline
+from nlplab.loggin.logger import logging
 
+
+logging.info("App Started")
 # Page config
 st.set_page_config(page_title="🧪 NLP LAB", layout="wide", page_icon="🧠")
 

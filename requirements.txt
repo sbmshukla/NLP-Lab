@@ -7,3 +7,4 @@ nltk
 plotly
 boto3
 python-dotenv
+-e .

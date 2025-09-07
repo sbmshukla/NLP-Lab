@@ -1,34 +1,24 @@
 import streamlit as st
 import joblib
-import os
+import numpy as np
 from nlplab.prediction_pipeline.prediction_pipeline import PredictionPipeline
 from nlplab.loggin.logger import logging
+from nlplab.exception.exception import handle_exception
+import plotly.graph_objects as go
 
-
+# Log app start
 logging.info("App Started")
+
 # Page config
 st.set_page_config(page_title="🧪 NLP LAB", layout="wide", page_icon="🧠")
 
 # Header
-st.markdown(
-    "<h1 style='text-align: center; color: #4B8BBE;'>💻 NLP LAB</h1>",
-    unsafe_allow_html=True,
-)
-
+st.markdown("<h2 style='text-align:center;'>💻 NLP LAB</h2>", unsafe_allow_html=True)
 st.markdown("---")
 
 # Sidebar
 with st.sidebar:
-
-    task = st.selectbox(
-        "🔍 Select NLP Task",
-        [
-            "Spam Detection",
-            # "Sentiment Analysis",
-            # "Text Summarization",
-            # "Toxic Comment Detection",
-        ],
-    )
+    task = st.selectbox("🔍 Select NLP Task", ["Spam Detection"])
     st.markdown("---")
     st.markdown(
         "Developed by [@sbmshukla](https://github.com/sbmshukla)",
@@ -36,9 +26,44 @@ with st.sidebar:
     )
 
 
-# Helper function placeholder
+# Helper function to load model
 def load_model(model_path):
-    return joblib.load(model_path)
+    try:
+        model = joblib.load(model_path)
+        return model
+    except Exception as e:
+        handle_exception(e)
+    return None
+
+
+def visulize_result(label, value, color="blue"):
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Bar(
+            x=[value],
+            y=[label],
+            orientation="h",
+            marker=dict(color=color),
+            text=f"{value}%",
+            textposition="inside",
+            textfont=dict(color="white", size=14),  # High contrast text
+            insidetextanchor="start",
+            hoverinfo="x+text",
+        )
+    )
+
+    fig.update_layout(
+        xaxis=dict(range=[0, 100], showgrid=False, zeroline=False),
+        yaxis=dict(showticklabels=True),
+        height=100,
+        margin=dict(t=20, b=20, l=10, r=10),
+        paper_bgcolor="rgba(240,240,240,0.2)",
+        plot_bgcolor="rgba(240,240,240,0.2)",
+        font=dict(size=12),
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
 
 
 # -------------------------
@@ -46,33 +71,33 @@ def load_model(model_path):
 # -------------------------
 if task == "Spam Detection":
     st.subheader("📧 Spam / Ham Detection")
+
     msg = st.text_area("💬 Enter a message to classify:")
+    predict_triggered = st.button("🚀 Predict Spam")
 
-    col1, col2 = st.columns([1, 3])
-    with col1:
-        if st.button("🚀 Predict Spam"):
-            if msg.strip():
-                model = load_model("models/spam_classifier.pkl")
-                if model:
-                    pipeline = PredictionPipeline(msg, model)
-                    prediction = pipeline.predict_data()[
-                        0
-                    ]  # [0] because predict() returns array
+    if predict_triggered:
+        if msg.strip():
+            model = load_model("models/spam_classifier.pkl")
+            if model:
+                pipeline = PredictionPipeline(msg, model)
+                prediction = pipeline.predict_data()
 
-                    if prediction == 1:
-                        st.error("⚠️ Warning: Maybe It's Spam")
-                    else:
-                        st.success("✅ Maybe It's Ham")
-            else:
-                st.warning("⚠️ Please enter a message.")
+                result = prediction[0][0]  # predicted label
+                ham_percent = np.round(prediction[1][0][0] * 100, 5)
+                spam_percent = np.round(prediction[1][0][1] * 100, 5)
 
-elif task == "Sentiment Analysis":
-    with st.container():
-        st.subheader("😊 Sentiment Analysis")
-        text = st.text_area("📝 Enter text to analyze sentiment:")
+                logging.info(
+                    f"ham_percent: {ham_percent}, spam_percent: {spam_percent}"
+                )
+                if result == 1:
+                    st.error("⚠️ Warning: Maybe It's Spam")
+                else:
+                    st.success("✅ Maybe It's Ham")
 
-        if st.button("🔍 Predict Sentiment"):
-            if text.strip():
-                st.success("Prediction placeholder: Positive/Negative/Neutral")
-            else:
-                st.warning("⚠️ Please enter text.")
+                with st.expander("🔍 View Probability Details", expanded=False):
+
+                    visulize_result(label="Spam", value=spam_percent, color="red")
+                    visulize_result(label="Ham", value=ham_percent, color="green")
+
+        else:
+            st.warning("⚠️ Please enter a message.")

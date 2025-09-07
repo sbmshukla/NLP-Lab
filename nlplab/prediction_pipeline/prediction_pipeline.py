@@ -34,4 +34,6 @@ class PredictionPipeline:
         """Preprocess text and make prediction"""
         cleaned_text = self.preprocess_text()
         # Wrap in list because most sklearn models expect 2D input
-        return self.model.predict([cleaned_text])
+        prediction = self.model.predict([cleaned_text])
+        prediction_probability = self.model.predict_proba([cleaned_text])
+        return [prediction, prediction_probability]

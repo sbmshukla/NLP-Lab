@@ -11,27 +11,21 @@ from nlplab.loggin.logger import logging
 from nlplab.exception.exception import handle_exception
 from manager.bucketmanager import S3ModelManager
 
+from dotenv import load_dotenv
 
-# ======================
-# 0. Ensure NLTK resources
-# ======================
-@st.cache_resource
-def ensure_nltk():
-    for r in ["wordnet", "omw-1.4", "stopwords"]:
-        try:
-            nltk.data.find(f"corpora/{r}")
-        except LookupError:
-            nltk.download(r, quiet=True)
+load_dotenv()
 
+deployment_status = str(os.getenv("DEPLOYMENT_STATUS")).lower()
+print(deployment_status)
 
-ensure_nltk()
+if deployment_status != "false":
+    # ======================
+    # 1. Environment / Manager
+    # ======================
+    # Populate os.environ from Streamlit secrets
+    for k, v in st.secrets.items():
+        os.environ[k] = str(v)
 
-# ======================
-# 1. Environment / Manager
-# ======================
-# Populate os.environ from Streamlit secrets
-for k, v in st.secrets.items():
-    os.environ[k] = str(v)
 
 s3_manager = S3ModelManager(
     access_key=os.getenv("AWS_ACCESS_KEY_ID"),

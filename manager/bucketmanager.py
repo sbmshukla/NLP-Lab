@@ -3,14 +3,10 @@ import boto3
 import time
 import joblib
 import io
-from dotenv import load_dotenv
-
-load_dotenv()
 
 
 class S3ModelManager:
     def __init__(self, access_key, secret_key, region, bucket_name):
-        self.deployment_status = os.getenv("DEPLOYMENT_STATUS")
         self.bucket_name = bucket_name
         self.s3 = boto3.client(
             "s3",

@@ -3,6 +3,12 @@ import pandas as pd
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 from nlplab.loggin.logger import logging
+import nltk
+
+try:
+    nltk.data.find("corpora/stopwords")
+except LookupError:
+    nltk.download("stopwords")
 
 lemmatizer = WordNetLemmatizer()
 stop_words = set(stopwords.words("english"))

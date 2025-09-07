@@ -36,6 +36,9 @@ def ui_log(message):
     st.session_state.logs.append(message)
 
 
+ui_log(f"Deploy Status{deployment_status}")
+
+
 # ======================
 # 2. Model Helpers
 # ======================

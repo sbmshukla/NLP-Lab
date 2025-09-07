@@ -22,6 +22,16 @@ if deployment_status:
         os.environ[k] = str(v)
         logging.info(f"Set env var from Streamlit secrets: {k}")
 
+    # ======================
+    # Streamlit UI - Internet & Model Switch Warning
+    # ======================
+
+    st.warning(
+        "⚠️ Warning: Loading models from S3 will use internet data. "
+        "Please avoid switching models repeatedly to save bandwidth."
+    )
+
+
 # Initialize S3 manager
 s3_manager = S3ModelManager(
     access_key=os.getenv("AWS_ACCESS_KEY_ID"),

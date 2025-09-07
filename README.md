@@ -67,6 +67,7 @@ DEPLOYMENT_STATUS=True
 - Models are pulled from **S3** only when needed  
 - Local cache limited to **2 models** (oldest auto-deleted)  
 - In deployment mode, models are loaded directly into **memory**  
+- If you are in local development, models are downloaded once and saved in the models folder
 
 ---
 

@@ -20,6 +20,7 @@ deployment_status = str(os.getenv("DEPLOYMENT_STATUS")).lower() == "true"
 if deployment_status:
     for k, v in st.secrets.items():
         os.environ[k] = str(v)
+        logging.info(f"Set env var from Streamlit secrets: {k}")
 
 # Initialize S3 manager
 s3_manager = S3ModelManager(
@@ -28,10 +29,13 @@ s3_manager = S3ModelManager(
     region=os.getenv("AWS_REGION"),
     bucket_name=os.getenv("AWS_S3_BUCKET_NAME"),
 )
+logging.info("Initialized S3ModelManager")
 
 # Initialize UI log
 if "logs" not in st.session_state:
     st.session_state.logs = []
+if "last_model_key" not in st.session_state:
+    st.session_state.last_model_key = None
 
 
 def ui_log(message):
@@ -48,10 +52,12 @@ def load_model(model_path):
     try:
         model = joblib.load(model_path)
         ui_log(f"Model deserialized from: {model_path}")
+        logging.info(f"Loaded model from {model_path}")
         return model
     except Exception as e:
         st.exception(e)
         ui_log(f"Failed to deserialize model: {model_path}")
+        logging.error(f"Failed to deserialize model: {model_path}, Exception: {e}")
         return None
 
 
@@ -59,15 +65,19 @@ def get_model(s3_key, model_dir="models"):
     """Load model based on deployment mode."""
     if deployment_status:
         ui_log("Deployment mode: pulling model directly from S3 (in-memory)")
+        logging.info(f"Fetching model from S3: {s3_key}")
         try:
             model = s3_manager.pull_model_in_memory(s3_key)
             if model:
                 ui_log(f"Model loaded from S3: {s3_key}")
+                logging.info(f"Model successfully loaded from S3: {s3_key}")
             else:
                 ui_log(f"pull_model_in_memory returned None for {s3_key}")
+                logging.warning(f"pull_model_in_memory returned None for {s3_key}")
             return model
         except Exception as e:
             st.exception(e)
+            logging.error(f"Failed to load model from S3: {s3_key}, Exception: {e}")
             return None
 
     # Local/dev mode
@@ -76,20 +86,25 @@ def get_model(s3_key, model_dir="models"):
 
     if os.path.exists(local_model_path):
         ui_log(f"Model found locally: {local_model_path}")
+        logging.info(f"Model found locally: {local_model_path}")
         return load_model(local_model_path)
 
     ui_log(f"Downloading model from S3: {s3_key} → {local_model_path}")
+    logging.info(f"Downloading model from S3: {s3_key}")
     try:
         s3_manager.pull_model(s3_key=s3_key, local_model_path=local_model_path)
         s3_manager.manage_local_models(model_dir=model_dir)
         if os.path.exists(local_model_path):
             ui_log(f"Download complete: {local_model_path}")
+            logging.info(f"Download complete: {local_model_path}")
             return load_model(local_model_path)
         else:
             ui_log(f"File missing after download: {local_model_path}")
+            logging.warning(f"File missing after download: {local_model_path}")
             return None
     except Exception as e:
         st.exception(e)
+        logging.error(f"Failed to download model: {s3_key}, Exception: {e}")
         return None
 
 
@@ -102,7 +117,7 @@ def visulize_result(label, value, color="blue"):
             y=[label],
             orientation="h",
             marker=dict(color=color),
-            text=f"{value}%",
+            text=f"{value:.2f}%",
             textposition="inside",
             textfont=dict(color="white", size=14),
             insidetextanchor="start",
@@ -119,6 +134,7 @@ def visulize_result(label, value, color="blue"):
         font=dict(size=12),
     )
     st.plotly_chart(fig, use_container_width=True)
+    logging.info(f"Visualized result for {label}: {value:.2f}%")
 
 
 # ======================
@@ -130,15 +146,26 @@ def _cached_model_loader(s3_key):
 
 
 def cached_get_model(s3_key):
+    """Load model and clear cache if a different model is requested."""
+    last_key = st.session_state.get("last_model_key")
+    if last_key != s3_key:
+        _cached_model_loader.clear()
+        ui_log(f"Cleared previous cached model: {last_key}")
+        logging.info(f"Cleared previous cached model: {last_key}")
+        st.session_state["last_model_key"] = s3_key
     model = _cached_model_loader(s3_key)
     ui_log(f"Using cached model for {s3_key}")
+    logging.info(f"Using cached model for {s3_key}")
     return model
 
 
 def clear_model_cache():
+    """Clear model cache and reset logs."""
     _cached_model_loader.clear()
     st.session_state.logs = []
+    st.session_state["last_model_key"] = None
     ui_log("Cleared model cache and reset logs")
+    logging.info("Cleared model cache and reset logs")
 
 
 # ======================
@@ -152,7 +179,7 @@ st.markdown("---")
 # Sidebar
 with st.sidebar:
     task = st.selectbox(
-        "Select NLP Task", ["Spam Detection", "Twitter Sentiment Detection"]
+        "Select NLP Task", ["Spam Detection", "Tweet Sentiment Detection"]
     )
     if st.button("Clear Model Cache"):
         clear_model_cache()
@@ -162,7 +189,9 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
+# ======================
 # Spam Detection Task
+# ======================
 if task == "Spam Detection":
     st.subheader("Spam / Ham Detection")
     msg = st.text_area("Enter a message to classify:")
@@ -171,23 +200,29 @@ if task == "Spam Detection":
     if predict_triggered:
         if msg.strip():
             ui_log("Fetching model...")
+            logging.info("Fetching spam detection model")
             model = cached_get_model("models/spam_classifier.pkl")
             if model:
                 ui_log("Model ready → running prediction")
+                logging.info("Running prediction for Spam Detection")
                 try:
                     pipeline = PredictionPipeline(msg, model)
                     prediction = pipeline.predict_data()
                 except Exception as e:
                     st.exception(e)
                     ui_log(f"Prediction failed: {e}")
+                    logging.error(f"Prediction failed: {e}")
                     prediction = None
 
                 if prediction:
                     result = prediction[0][0]
-                    ham_percent = np.round(prediction[1][0][0] * 100, 5)
-                    spam_percent = np.round(prediction[1][0][1] * 100, 5)
+                    ham_percent = np.round(prediction[1][0][0] * 100, 2)
+                    spam_percent = np.round(prediction[1][0][1] * 100, 2)
 
                     ui_log(
+                        f"Prediction result: {'Spam' if result else 'Ham'}, Probabilities - Ham: {ham_percent}%, Spam: {spam_percent}%"
+                    )
+                    logging.info(
                         f"Prediction result: {'Spam' if result else 'Ham'}, Probabilities - Ham: {ham_percent}%, Spam: {spam_percent}%"
                     )
 
@@ -204,6 +239,68 @@ if task == "Spam Detection":
         else:
             st.warning("Please enter a message.")
 
+# ======================
+# Tweet Sentiment Detection Task
+# ======================
+elif task == "Tweet Sentiment Detection":
+    st.subheader("Tweet Sentiment Detection")
+    tweet = st.text_area("Enter a tweet to analyze:")
+    predict_triggered = st.button("Predict Sentiment")
+
+    if predict_triggered:
+        if tweet.strip():
+            ui_log("Fetching sentiment model...")
+            logging.info("Fetching sentiment model")
+            model = cached_get_model("models/sentiment_classifier.pkl")
+            if model:
+                ui_log("Sentiment model ready → running prediction")
+                logging.info("Running prediction for Tweet Sentiment Detection")
+                try:
+                    pipeline = PredictionPipeline(tweet, model)
+                    prediction = pipeline.predict_data()
+                except Exception as e:
+                    st.exception(e)
+                    ui_log(f"Prediction failed: {e}")
+                    logging.error(f"Prediction failed: {e}")
+                    prediction = None
+
+                if prediction:
+                    result_code = prediction[0][0]
+                    probabilities = prediction[1][0]
+
+                    sentiment_map = {
+                        2: "Positive",
+                        1: "Neutral",
+                        0: "Negative",
+                        -1: "Irrelevant",
+                    }
+                    sentiment = sentiment_map.get(result_code, "Unknown")
+                    st.success(f"Predicted Sentiment: {sentiment}")
+                    ui_log(f"Prediction: {sentiment}, Probabilities: {probabilities}")
+                    logging.info(
+                        f"Prediction: {sentiment}, Probabilities: {probabilities}"
+                    )
+
+                    with st.expander("View Probability Details", expanded=False):
+                        for code, color in zip(
+                            [-1, 0, 1, 2], ["gray", "red", "blue", "green"]
+                        ):
+                            visulize_result(
+                                label=sentiment_map[code],
+                                value=(
+                                    probabilities[code + 1] * 100
+                                    if code >= 0
+                                    else probabilities[0] * 100
+                                ),
+                                color=color,
+                            )
+            else:
+                st.error("Sentiment model could not be loaded.")
+        else:
+            st.warning("Please enter a tweet.")
+
+# ======================
 # Debug Log Panel
+# ======================
 st.markdown("---")
 st.text_area("Debug Log", "\n".join(st.session_state.logs), height=200)

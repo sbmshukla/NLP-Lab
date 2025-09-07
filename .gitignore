@@ -46,11 +46,12 @@ mlruns/
 mlartifacts/
 
 # 📁 Model folders (if generated)
-#models/
-notebooks/
+models/
+#notebooks/
 datasets/
 checkpoints/
 saved_models/
+logs/
 
 # 📦 Jupyter Notebook checkpoints
 .ipynb_checkpoints/

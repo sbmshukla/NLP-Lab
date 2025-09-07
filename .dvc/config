@@ -1,6 +1,0 @@
-[core]
-    remote = myremote
-['remote "myremote"']
-    url = s3://nlplabml/models
-    profile = default
-    region = eu-north-1

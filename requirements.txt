@@ -4,5 +4,6 @@ pandas
 scikit-learn
 joblib
 nltk
-dvc[s3]
 plotly
+boto3
+python-dotenv

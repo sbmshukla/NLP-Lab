@@ -1,8 +1,11 @@
 import os
 import boto3
-import time
 import joblib
 import io
+import sys
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from nlplab.loggin.logger import logging
 
 
 class S3ModelManager:
@@ -21,10 +24,10 @@ class S3ModelManager:
             response = self.s3.get_object(Bucket=self.bucket_name, Key=s3_key)
             model_bytes = response["Body"].read()
             model = joblib.load(io.BytesIO(model_bytes))
-            print(f"✅ Model loaded directly from S3 into memory: {s3_key}")
+            logging.info(f"Model loaded directly from S3 into memory: {s3_key}")
             return model
         except Exception as e:
-            print(f"❌ Failed to load model from S3 into memory: {e}")
+            logging.error(f"Failed to load model from S3 into memory: {e}")
             return None
 
     def push_model(self, local_model_path, s3_key=None):
@@ -33,9 +36,9 @@ class S3ModelManager:
             s3_key = os.path.basename(local_model_path)
         try:
             self.s3.upload_file(local_model_path, self.bucket_name, s3_key)
-            print(f"✅ Uploaded '{local_model_path}' to S3 as '{s3_key}'")
+            logging.info(f"Uploaded '{local_model_path}' to S3 as '{s3_key}'")
         except Exception as e:
-            print(f"❌ Upload failed: {e}")
+            logging.error(f"Upload failed: {e}")
 
     def pull_model(self, s3_key, local_model_path=None):
         """Download model from S3"""
@@ -44,9 +47,9 @@ class S3ModelManager:
         try:
             os.makedirs(os.path.dirname(local_model_path), exist_ok=True)
             self.s3.download_file(self.bucket_name, s3_key, local_model_path)
-            print(f"📦 Downloaded '{s3_key}' to '{local_model_path}'")
+            logging.info(f"Downloaded '{s3_key}' to '{local_model_path}'")
         except Exception as e:
-            print(f"❌ Download failed: {e}")
+            logging.error(f"Download failed: {e}")
 
     def manage_local_models(self, model_dir="models", max_models=2):
         """Ensure only the latest N models are kept locally"""
@@ -66,6 +69,6 @@ class S3ModelManager:
             for file in files_to_delete:
                 try:
                     os.remove(file)
-                    print(f"🗑️ Deleted old model: {file}")
+                    logging.info(f"Deleted old model: {file}")
                 except Exception as e:
-                    print(f"⚠️ Failed to delete {file}: {e}")
+                    logging.warning(f"Failed to delete {file}: {e}")

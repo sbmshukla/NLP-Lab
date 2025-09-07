@@ -1,7 +1,7 @@
 import streamlit as st
 import joblib
 import os
-from prediction_pipeline.prediction_pipeline import PredictionPipeline
+from nlplab.prediction_pipeline.prediction_pipeline import PredictionPipeline
 
 # Page config
 st.set_page_config(page_title="🧪 NLP LAB", layout="wide", page_icon="🧠")
@@ -38,24 +38,30 @@ def load_model(model_path):
     return joblib.load(model_path)
 
 
-# Task Containers
+# -------------------------
+# Task: Spam Detection
+# -------------------------
 if task == "Spam Detection":
-    with st.container():
-        st.subheader("📧 Spam / Ham Detection")
-        msg = st.text_area("💬 Enter a message to classify:")
+    st.subheader("📧 Spam / Ham Detection")
+    msg = st.text_area("💬 Enter a message to classify:")
 
-        col1, col2 = st.columns([1, 3])
-        with col1:
-            if st.button("🚀 Predict Spam"):
-                if msg.strip():
-
-                    model = load_model("models/spam_classifier.pkl")
-                    # prediction = model.predict([msg])
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        if st.button("🚀 Predict Spam"):
+            if msg.strip():
+                model = load_model("models/spam_classifier.pkl")
+                if model:
                     pipeline = PredictionPipeline(msg, model)
-                    prediction = pipeline.predict_data()[0]
-                    st.success(f"Prediction: {'Spam' if prediction==0 else 'Ham'}")
-                else:
-                    st.warning("⚠️ Please enter a message.")
+                    prediction = pipeline.predict_data()[
+                        0
+                    ]  # [0] because predict() returns array
+
+                    if prediction == 1:
+                        st.error("⚠️ Warning: Maybe It's Spam")
+                    else:
+                        st.success("✅ Maybe It's Ham")
+            else:
+                st.warning("⚠️ Please enter a message.")
 
 elif task == "Sentiment Analysis":
     with st.container():

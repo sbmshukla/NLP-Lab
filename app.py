@@ -16,6 +16,9 @@ from manager.bucketmanager import S3ModelManager
 # ======================
 load_dotenv()
 
+for k, v in st.secrets.items():
+    os.environ[k] = str(v)
+
 s3_manager = S3ModelManager(
     access_key=os.getenv("AWS_ACCESS_KEY_ID"),
     secret_key=os.getenv("AWS_SECRET_ACCESS_KEY"),

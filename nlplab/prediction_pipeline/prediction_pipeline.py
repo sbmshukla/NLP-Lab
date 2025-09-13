@@ -1,6 +1,6 @@
 import re
 import pandas as pd
-from nltk.corpus import stopwords
+from nltk.corpus import stopwords, words
 from nltk.stem import WordNetLemmatizer
 import nltk
 import streamlit as st
@@ -11,10 +11,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from loggin.logger import logging
 import zipfile
 
-# Ensure NLTK resources are available
 @st.cache_resource
 def ensure_nltk():
-    resources = ["wordnet", "omw-1.4", "stopwords"]
+    resources = ["wordnet", "omw-1.4", "stopwords", "words"]
     for r in resources:
         try:
             nltk.data.find(f"corpora/{r}")
@@ -25,12 +24,53 @@ def ensure_nltk():
     logging.info("All required NLTK resources are ready.")
     return True
 
-
 ensure_nltk()
 
+# ======================
+# Preprocessing utils
+# ======================
 lemmatizer = WordNetLemmatizer()
 stop_words = set(stopwords.words("english"))
+english_vocab = set(words.words())
 
+def validate_real_words(msg, threshold=0.5):
+    """Validate that a message contains enough real English words."""
+    tokens = [lemmatizer.lemmatize(w.lower()) for w in msg.split() if w.isalpha()]
+    if not tokens:
+        return False, "Message is empty or contains no valid words."
+    
+    real_words = [w for w in tokens if w in english_vocab]
+    
+    if len(real_words) / len(tokens) < threshold:
+        return False, "Message contains too many unknown or random words."
+    
+    return True, ""
+
+def validate_gibberish(msg):
+    """Reject words with excessive consecutive consonants (likely gibberish)."""
+    tokens = [w for w in msg.split() if w.isalpha()]
+    for word in tokens:
+        consonants = len(re.findall(r"[bcdfghjklmnpqrstvwxyz]", word, re.I))
+        if consonants / max(1, len(word)) > 0.7:
+            return False, "Message contains gibberish."
+    return True, ""
+
+def validate_message(msg):
+    """Combined validation for proper message."""
+    if not msg.strip():
+        return False, "Message is empty."
+    
+    # Real words check
+    valid, err = validate_real_words(msg)
+    if not valid:
+        return False, err
+    
+    # Gibberish check
+    valid, err = validate_gibberish(msg)
+    if not valid:
+        return False, err
+    
+    return True, ""
 
 class PredictionPipeline:
     def __init__(self, text: str, model: object):

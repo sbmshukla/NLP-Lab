@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 import nltk
 
 from nlplab.prediction_pipeline.prediction_pipeline import PredictionPipeline
+from nlplab.prediction_pipeline.prediction_pipeline import validate_message
 from nlplab.prediction_pipeline.imdb_prediction_pipeline import IMDBPredictionPipeline
 from nlplab.loggin.logger import logging
 from nlplab.exception.exception import handle_exception
@@ -339,9 +340,11 @@ elif task == "Movie Review Classifier":
     st.subheader("Movie Review Classifier Using RNN-NLP Deep Learning")
     review = st.text_area("Enter a review to analyze:")
     predict_triggered = st.button("Classify Review")
+    review_status, err = validate_message(review)
 
     if predict_triggered:
-        if review.strip():
+        if review_status:
+            review = review.strip()
             ui_log("Fetching RNN-NLP model...")
             logging.info("Fetching simple_rnn_imdb_v1.h5 model")
             
@@ -354,7 +357,19 @@ elif task == "Movie Review Classifier":
                     # Use the review text instead of 'tweet'
                     pipeline :IMDBPredictionPipeline = IMDBPredictionPipeline(review, model)
                     prediction, prob = pipeline.predict_tone(review=review)
-                    st.warning(f"{prediction} - {prob}")
+                    # Map sentiment to color
+                    sentiment_colors = {"Positive": "green", "Neutral": "blue", "Negative": "red"}
+                    # Get color for the predicted sentiment
+                    color = sentiment_colors.get(prediction, "black")
+
+                    # Display sentiment nicely
+                    st.markdown(
+                        f"<p style='font-size:20px; color:{color};'><b>Sentiment:</b> {prediction}</p>",
+                        unsafe_allow_html=True
+                    )
+
+                    # Display confidence as percentage
+                    st.info(f"Prediction Confidence: {prob*100:.2f}%")
                 except Exception as e:
                     st.exception(e)
                     ui_log(f"Prediction failed: {e}")
@@ -363,7 +378,7 @@ elif task == "Movie Review Classifier":
             else:
                 st.error("RNN model could not be loaded.")
         else:
-            st.warning("Please enter a review.")
+            st.warning(err)
 
 
 

@@ -22,8 +22,8 @@ s3_manager = S3ModelManager(
 
 
 if __name__ == "__main__":
-    local_model_path = os.path.join(PROJECT_ROOT, "models", "sentiment_classifier.pkl")
-    s3_key = "models/sentiment_classifier.pkl"
+    local_model_path = os.path.join(PROJECT_ROOT, "models", "simple_rnn_imdb_v1.h5")
+    s3_key = "models/simple_rnn_imdb_v1.h5"
 
     logging.info(f"Starting upload of model: {local_model_path} to S3 as {s3_key}")
     try:

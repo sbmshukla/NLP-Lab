@@ -6,10 +6,12 @@ import plotly.graph_objects as go
 import nltk
 
 from nlplab.prediction_pipeline.prediction_pipeline import PredictionPipeline
+from nlplab.prediction_pipeline.imdb_prediction_pipeline import IMDBPredictionPipeline
 from nlplab.loggin.logger import logging
 from nlplab.exception.exception import handle_exception
 from manager.bucketmanager import S3ModelManager
 from dotenv import load_dotenv
+from tensorflow.keras.models import load_model as tf_load_model
 
 load_dotenv()
 
@@ -57,7 +59,7 @@ def ui_log(message):
 # ======================
 # Model Helpers
 # ======================
-def load_model(model_path):
+def load_model_old(model_path):
     """Joblib deserializer with UI logging."""
     try:
         model = joblib.load(model_path)
@@ -70,6 +72,25 @@ def load_model(model_path):
         logging.error(f"Failed to deserialize model: {model_path}, Exception: {e}")
         return None
 
+def load_model(model_path):
+    """Load model based on file type (.pkl → joblib, .h5 → Keras)."""
+    try:
+        if model_path.endswith(".pkl"):
+            model = joblib.load(model_path)
+            ui_log(f"Joblib model deserialized from: {model_path}")
+        elif model_path.endswith(".h5"):
+            model = tf_load_model(model_path)
+            ui_log(f"Keras model loaded from: {model_path}")
+        else:
+            raise ValueError(f"Unsupported model type: {model_path}")
+
+        logging.info(f"Model loaded successfully: {model_path}")
+        return model
+    except Exception as e:
+        st.exception(e)
+        ui_log(f"Failed to load model: {model_path}")
+        logging.error(f"Failed to load model: {model_path}, Exception: {e}")
+        return None
 
 def get_model(s3_key, model_dir="models"):
     """Load model based on deployment mode."""
@@ -189,7 +210,7 @@ st.markdown("---")
 # Sidebar
 with st.sidebar:
     task = st.selectbox(
-        "Select NLP Task", ["Spam Detection", "Tweet Sentiment Detection"]
+        "Select NLP Task", ["Spam Detection", "Tweet Sentiment Detection", "Movie Review Classifier"]
     )
     if st.button("Clear Model Cache"):
         clear_model_cache()
@@ -211,7 +232,7 @@ if task == "Spam Detection":
         if msg.strip():
             ui_log("Fetching model...")
             logging.info("Fetching spam detection model")
-            model = cached_get_model("models/spam_classifier.pkl")
+            model = cached_get_model("models/spam_classifier.pkl") if deployment_status else get_model("models/spam_classifier.pkl")
             if model:
                 ui_log("Model ready → running prediction")
                 logging.info("Running prediction for Spam Detection")
@@ -261,7 +282,7 @@ elif task == "Tweet Sentiment Detection":
         if tweet.strip():
             ui_log("Fetching sentiment model...")
             logging.info("Fetching sentiment model")
-            model = cached_get_model("models/sentiment_classifier.pkl")
+            model = cached_get_model("models/sentiment_classifier.pkl") if deployment_status else get_model("models/sentiment_classifier.pkl")
             if model:
                 ui_log("Sentiment model ready → running prediction")
                 logging.info("Running prediction for Tweet Sentiment Detection")
@@ -308,6 +329,43 @@ elif task == "Tweet Sentiment Detection":
                 st.error("Sentiment model could not be loaded.")
         else:
             st.warning("Please enter a tweet.")
+
+
+
+# ======================
+# Movie Review Classifier Task Using RNN Deep Learning
+# ======================
+elif task == "Movie Review Classifier":
+    st.subheader("Movie Review Classifier Using RNN-NLP Deep Learning")
+    review = st.text_area("Enter a review to analyze:")
+    predict_triggered = st.button("Classify Review")
+
+    if predict_triggered:
+        if review.strip():
+            ui_log("Fetching RNN-NLP model...")
+            logging.info("Fetching simple_rnn_imdb_v1.h5 model")
+            
+            model = cached_get_model("models/simple_rnn_imdb_v1.h5") if deployment_status else get_model("models/simple_rnn_imdb_v1.h5")
+            
+            if model:
+                ui_log("RNN model ready → running prediction")
+                logging.info("Running prediction for Movie Review Classifier")
+                try:
+                    # Use the review text instead of 'tweet'
+                    pipeline :IMDBPredictionPipeline = IMDBPredictionPipeline(review, model)
+                    prediction, prob = pipeline.predict_tone(review=review)
+                    st.warning(f"{prediction} - {prob}")
+                except Exception as e:
+                    st.exception(e)
+                    ui_log(f"Prediction failed: {e}")
+                    logging.error(f"Prediction failed: {e}")
+
+            else:
+                st.error("RNN model could not be loaded.")
+        else:
+            st.warning("Please enter a review.")
+
+
 
 # ======================
 # Debug Log Panel

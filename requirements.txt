@@ -1,10 +1,12 @@
 streamlit
 numpy
 pandas
-scikit-learn
+scikit-learn==1.6.1
 joblib
 nltk
 plotly
 boto3
 python-dotenv
+tensorflow
+contractions
 -e .

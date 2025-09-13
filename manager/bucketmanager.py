@@ -6,7 +6,8 @@ import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from nlplab.loggin.logger import logging
-
+from tensorflow.keras.models import load_model
+import h5py
 
 class S3ModelManager:
     def __init__(self, access_key, secret_key, region, bucket_name):
@@ -18,7 +19,7 @@ class S3ModelManager:
             region_name=region,
         )
 
-    def pull_model_in_memory(self, s3_key):
+    def pull_model_in_memory_old(self, s3_key):
         """Download model from S3 and load directly into memory"""
         try:
             response = self.s3.get_object(Bucket=self.bucket_name, Key=s3_key)
@@ -26,6 +27,34 @@ class S3ModelManager:
             model = joblib.load(io.BytesIO(model_bytes))
             logging.info(f"Model loaded directly from S3 into memory: {s3_key}")
             return model
+        except Exception as e:
+            logging.error(f"Failed to load model from S3 into memory: {e}")
+            return None
+
+    def pull_model_in_memory(self, s3_key):
+        """Download model from S3 and load directly into memory"""
+        try:
+            response = self.s3.get_object(Bucket=self.bucket_name, Key=s3_key)
+            model_bytes = response["Body"].read()
+            ext = os.path.splitext(s3_key)[-1].lower()
+
+            if ext in [".h5", ".keras"]:  # TensorFlow/Keras model
+                
+                with io.BytesIO(model_bytes) as f:
+                    with h5py.File(f, "r") as h5file:
+                        model = load_model(h5file)
+                logging.info(f"Keras model loaded from S3 into memory: {s3_key}")
+
+            elif ext in [".pkl", ".joblib"]:  # sklearn/joblib models
+                model = joblib.load(io.BytesIO(model_bytes))
+                logging.info(f"Joblib model loaded from S3 into memory: {s3_key}")
+
+            else:
+                logging.error(f"Unsupported model format: {ext}")
+                return None
+
+            return model
+
         except Exception as e:
             logging.error(f"Failed to load model from S3 into memory: {e}")
             return None

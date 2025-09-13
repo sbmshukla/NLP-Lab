@@ -9,7 +9,7 @@ import os
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from loggin.logger import logging
-
+import zipfile
 
 # Ensure NLTK resources are available
 @st.cache_resource
@@ -18,7 +18,7 @@ def ensure_nltk():
     for r in resources:
         try:
             nltk.data.find(f"corpora/{r}")
-        except LookupError:
+        except (LookupError, zipfile.BadZipFile):
             logging.info(f"Downloading NLTK resource: {r}")
             nltk.download(r, quiet=True)
             logging.info(f"Downloaded NLTK resource: {r}")
@@ -78,3 +78,7 @@ class PredictionPipeline:
         except Exception as e:
             logging.error(f"Prediction failed: {e}")
             return [None, None]
+
+
+
+    

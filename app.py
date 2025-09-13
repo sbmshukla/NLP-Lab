@@ -4,9 +4,9 @@ import numpy as np
 import streamlit as st
 import plotly.graph_objects as go
 import nltk
-
+import re
+from nltk.corpus import words
 from nlplab.prediction_pipeline.prediction_pipeline import PredictionPipeline
-from nlplab.prediction_pipeline.prediction_pipeline import validate_message
 from nlplab.prediction_pipeline.imdb_prediction_pipeline import IMDBPredictionPipeline
 from nlplab.loggin.logger import logging
 from nlplab.exception.exception import handle_exception
@@ -24,16 +24,10 @@ if deployment_status:
     for k, v in st.secrets.items():
         os.environ[k] = str(v)
         logging.info(f"Set env var from Streamlit secrets: {k}")
-
-    # ======================
-    # Streamlit UI - Internet & Model Switch Warning
-    # ======================
-
     st.warning(
         "⚠️ Warning: Loading models from S3 will use internet data. "
         "Please avoid switching models repeatedly to save bandwidth."
     )
-
 
 # Initialize S3 manager
 s3_manager = S3ModelManager(
@@ -50,29 +44,14 @@ if "logs" not in st.session_state:
 if "last_model_key" not in st.session_state:
     st.session_state.last_model_key = None
 
-
 def ui_log(message):
     """Log to both Python logger and Streamlit UI panel."""
     logging.info(message)
     st.session_state.logs.append(message)
 
-
 # ======================
 # Model Helpers
 # ======================
-def load_model_old(model_path):
-    """Joblib deserializer with UI logging."""
-    try:
-        model = joblib.load(model_path)
-        ui_log(f"Model deserialized from: {model_path}")
-        logging.info(f"Loaded model from {model_path}")
-        return model
-    except Exception as e:
-        st.exception(e)
-        ui_log(f"Failed to deserialize model: {model_path}")
-        logging.error(f"Failed to deserialize model: {model_path}, Exception: {e}")
-        return None
-
 def load_model(model_path):
     """Load model based on file type (.pkl → joblib, .h5 → Keras)."""
     try:
@@ -139,7 +118,6 @@ def get_model(s3_key, model_dir="models"):
         logging.error(f"Failed to download model: {s3_key}, Exception: {e}")
         return None
 
-
 def visulize_result(label, value, color="blue"):
     """Horizontal bar chart for probability visualization."""
     fig = go.Figure()
@@ -168,14 +146,12 @@ def visulize_result(label, value, color="blue"):
     st.plotly_chart(fig, use_container_width=True)
     logging.info(f"Visualized result for {label}: {value:.2f}%")
 
-
 # ======================
 # Cache Wrapper
 # ======================
 @st.cache_resource
 def _cached_model_loader(s3_key):
     return get_model(s3_key)
-
 
 def cached_get_model(s3_key):
     """Load model and clear cache if a different model is requested."""
@@ -190,7 +166,6 @@ def cached_get_model(s3_key):
     logging.info(f"Using cached model for {s3_key}")
     return model
 
-
 def clear_model_cache():
     """Clear model cache and reset logs."""
     _cached_model_loader.clear()
@@ -199,6 +174,28 @@ def clear_model_cache():
     ui_log("Cleared model cache and reset logs")
     logging.info("Cleared model cache and reset logs")
 
+# ======================
+# Message Validation
+# ======================
+english_vocab = set(words.words())
+
+def validate_message(msg, min_words=10, min_chars=50):
+    """
+    Simple message validation:
+    - Must have at least `min_words` words
+    - Must have at least `min_chars` characters
+    """
+    if not msg or not msg.strip():
+        return False, "Message is empty."
+
+    tokens = [w for w in msg.split() if w.isalpha()]
+    if len(tokens) < min_words:
+        return False, f"Message must contain at least {min_words} words."
+
+    if len(msg.strip()) < min_chars:
+        return False, f"Message must be at least {min_chars} characters long."
+
+    return True, ""
 
 # ======================
 # Streamlit UI
@@ -222,7 +219,7 @@ with st.sidebar:
     )
 
 # ======================
-# Spam Detection Task
+# Spam Detection
 # ======================
 if task == "Spam Detection":
     st.subheader("Spam / Ham Detection")
@@ -230,49 +227,29 @@ if task == "Spam Detection":
     predict_triggered = st.button("Predict Spam")
 
     if predict_triggered:
-        if msg.strip():
-            ui_log("Fetching model...")
-            logging.info("Fetching spam detection model")
+        valid, err = validate_message(msg)
+        if valid:
             model = cached_get_model("models/spam_classifier.pkl") if deployment_status else get_model("models/spam_classifier.pkl")
             if model:
-                ui_log("Model ready → running prediction")
-                logging.info("Running prediction for Spam Detection")
-                try:
-                    pipeline = PredictionPipeline(msg, model)
-                    prediction = pipeline.predict_data()
-                except Exception as e:
-                    st.exception(e)
-                    ui_log(f"Prediction failed: {e}")
-                    logging.error(f"Prediction failed: {e}")
-                    prediction = None
-
-                if prediction:
-                    result = prediction[0][0]
-                    ham_percent = np.round(prediction[1][0][0] * 100, 2)
-                    spam_percent = np.round(prediction[1][0][1] * 100, 2)
-
-                    ui_log(
-                        f"Prediction result: {'Spam' if result else 'Ham'}, Probabilities - Ham: {ham_percent}%, Spam: {spam_percent}%"
-                    )
-                    logging.info(
-                        f"Prediction result: {'Spam' if result else 'Ham'}, Probabilities - Ham: {ham_percent}%, Spam: {spam_percent}%"
-                    )
-
-                    if result == 1:
-                        st.error("Warning: Maybe It's Spam")
-                    else:
-                        st.success("Maybe It's Ham")
-
-                    with st.expander("View Probability Details", expanded=False):
-                        visulize_result(label="Spam", value=spam_percent, color="red")
-                        visulize_result(label="Ham", value=ham_percent, color="green")
+                pipeline = PredictionPipeline(msg, model)
+                prediction = pipeline.predict_data()
+                result = prediction[0][0]
+                ham_percent = np.round(prediction[1][0][0]*100,2)
+                spam_percent = np.round(prediction[1][0][1]*100,2)
+                if result==1:
+                    st.error("Warning: Maybe It's Spam")
+                else:
+                    st.success("Maybe It's Ham")
+                with st.expander("View Probability Details"):
+                    visulize_result("Spam", spam_percent, "red")
+                    visulize_result("Ham", ham_percent, "green")
             else:
                 st.error("Model could not be loaded.")
         else:
-            st.warning("Please enter a message.")
+            st.warning(err)
 
 # ======================
-# Tweet Sentiment Detection Task
+# Tweet Sentiment Detection
 # ======================
 elif task == "Tweet Sentiment Detection":
     st.subheader("Tweet Sentiment Detection")
@@ -280,110 +257,52 @@ elif task == "Tweet Sentiment Detection":
     predict_triggered = st.button("Predict Sentiment")
 
     if predict_triggered:
-        if tweet.strip():
-            ui_log("Fetching sentiment model...")
-            logging.info("Fetching sentiment model")
+        valid, err = validate_message(tweet)
+        if valid:
             model = cached_get_model("models/sentiment_classifier.pkl") if deployment_status else get_model("models/sentiment_classifier.pkl")
             if model:
-                ui_log("Sentiment model ready → running prediction")
-                logging.info("Running prediction for Tweet Sentiment Detection")
-                try:
-                    pipeline = PredictionPipeline(tweet, model)
-                    prediction = pipeline.predict_data()
-                except Exception as e:
-                    st.exception(e)
-                    ui_log(f"Prediction failed: {e}")
-                    logging.error(f"Prediction failed: {e}")
-                    prediction = None
-
-                if prediction:
-                    result_code = prediction[0][0]
-                    probabilities = prediction[1][0]
-
-                    sentiment_map = {
-                        2: "Positive",
-                        1: "Neutral",
-                        0: "Negative",
-                        -1: "Irrelevant",
-                    }
-                    sentiment = sentiment_map.get(result_code, "Unknown")
-                    st.success(f"Predicted Sentiment: {sentiment}")
-                    ui_log(f"Prediction: {sentiment}, Probabilities: {probabilities}")
-                    logging.info(
-                        f"Prediction: {sentiment}, Probabilities: {probabilities}"
-                    )
-
-                    with st.expander("View Probability Details", expanded=False):
-                        for code, color in zip(
-                            [-1, 0, 1, 2], ["gray", "red", "blue", "green"]
-                        ):
-                            visulize_result(
-                                label=sentiment_map[code],
-                                value=(
-                                    probabilities[code + 1] * 100
-                                    if code >= 0
-                                    else probabilities[0] * 100
-                                ),
-                                color=color,
-                            )
+                pipeline = PredictionPipeline(tweet, model)
+                prediction = pipeline.predict_data()
+                result_code = prediction[0][0]
+                probabilities = prediction[1][0]
+                sentiment_map = {2:"Positive",1:"Neutral",0:"Negative",-1:"Irrelevant"}
+                sentiment = sentiment_map.get(result_code,"Unknown")
+                st.success(f"Predicted Sentiment: {sentiment}")
+                with st.expander("View Probability Details"):
+                    for code,color in zip([-1,0,1,2],["gray","red","blue","green"]):
+                        val = probabilities[code+1]*100 if code>=0 else probabilities[0]*100
+                        visulize_result(sentiment_map[code], val, color)
             else:
                 st.error("Sentiment model could not be loaded.")
         else:
-            st.warning("Please enter a tweet.")
-
-
+            st.warning(err)
 
 # ======================
-# Movie Review Classifier Task Using RNN Deep Learning
+# Movie Review Classifier
 # ======================
 elif task == "Movie Review Classifier":
     st.subheader("Movie Review Classifier Using RNN-NLP Deep Learning")
     review = st.text_area("Enter a review to analyze:")
     predict_triggered = st.button("Classify Review")
-    review_status, err = validate_message(review)
 
     if predict_triggered:
-        if review_status:
-            review = review.strip()
-            ui_log("Fetching RNN-NLP model...")
-            logging.info("Fetching simple_rnn_imdb_v1.h5 model")
-            
+        valid, err = validate_message(review)
+        if valid:
             model = cached_get_model("models/simple_rnn_imdb_v1.h5") if deployment_status else get_model("models/simple_rnn_imdb_v1.h5")
-            
             if model:
-                ui_log("RNN model ready → running prediction")
-                logging.info("Running prediction for Movie Review Classifier")
-                try:
-                    # Use the review text instead of 'tweet'
-                    pipeline :IMDBPredictionPipeline = IMDBPredictionPipeline(review, model)
-                    prediction, prob = pipeline.predict_tone(review=review)
-                    # Map sentiment to color
-                    sentiment_colors = {"Positive": "green", "Neutral": "blue", "Negative": "red"}
-                    # Get color for the predicted sentiment
-                    color = sentiment_colors.get(prediction, "black")
-
-                    # Display sentiment nicely
-                    st.markdown(
-                        f"<p style='font-size:20px; color:{color};'><b>Sentiment:</b> {prediction}</p>",
-                        unsafe_allow_html=True
-                    )
-
-                    # Display confidence as percentage
-                    st.info(f"Prediction Confidence: {prob*100:.2f}%")
-                except Exception as e:
-                    st.exception(e)
-                    ui_log(f"Prediction failed: {e}")
-                    logging.error(f"Prediction failed: {e}")
-
+                pipeline = IMDBPredictionPipeline(review, model)
+                prediction, prob = pipeline.predict_tone(review)
+                color_map = {"Positive":"green","Neutral":"blue","Negative":"red"}
+                color = color_map.get(prediction,"black")
+                st.markdown(f"<p style='font-size:20px; color:{color};'><b>Sentiment:</b> {prediction}</p>",unsafe_allow_html=True)
+                st.info(f"Prediction Confidence: {prob*100:.2f}%")
             else:
                 st.error("RNN model could not be loaded.")
         else:
             st.warning(err)
 
-
-
 # ======================
-# Debug Log Panel
+# Debug Log
 # ======================
 st.markdown("---")
 st.text_area("Debug Log", "\n".join(st.session_state.logs), height=200)

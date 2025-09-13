@@ -8,7 +8,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from nlplab.loggin.logger import logging
 from tensorflow.keras.models import load_model
 import h5py
-
+from nlplab.exception.exception import CustomException
 class S3ModelManager:
     def __init__(self, access_key, secret_key, region, bucket_name):
         self.bucket_name = bucket_name
@@ -57,7 +57,8 @@ class S3ModelManager:
 
         except Exception as e:
             logging.error(f"Failed to load model from S3 into memory: {e}")
-            return None
+            raise CustomException(e, sys)
+            #return None
 
     def push_model(self, local_model_path, s3_key=None):
         """Upload model to S3"""

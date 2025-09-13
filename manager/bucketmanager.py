@@ -39,11 +39,15 @@ class S3ModelManager:
             ext = os.path.splitext(s3_key)[-1].lower()
 
             if ext in [".h5", ".keras"]:  # TensorFlow/Keras model
-                
                 with io.BytesIO(model_bytes) as f:
-                    with h5py.File(f, "r") as h5file:
-                        model = load_model(h5file)
+                    model = load_model(f)  # <- pass BytesIO directly
                 logging.info(f"Keras model loaded from S3 into memory: {s3_key}")
+            # elif ext in [".h5", ".keras"]:  # TensorFlow/Keras model
+                
+            #     with io.BytesIO(model_bytes) as f:
+            #         with h5py.File(f, "r") as h5file:
+            #             model = load_model(h5file)
+            #     logging.info(f"Keras model loaded from S3 into memory: {s3_key}")
 
             elif ext in [".pkl", ".joblib"]:  # sklearn/joblib models
                 model = joblib.load(io.BytesIO(model_bytes))

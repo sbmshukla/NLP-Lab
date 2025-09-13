@@ -31,7 +31,7 @@ class S3ModelManager:
             logging.error(f"Failed to load model from S3 into memory: {e}")
             return None
 
-    def pull_model_in_memory(self, s3_key):
+    def pull_model_in_memory_semi_old(self, s3_key):
         """Download model from S3 and load directly into memory"""
         try:
             response = self.s3.get_object(Bucket=self.bucket_name, Key=s3_key)
@@ -61,6 +61,35 @@ class S3ModelManager:
 
         except Exception as e:
             logging.error(f"Failed to load model from S3 into memory: {e}")
+            raise CustomException(e, sys)
+            #return None
+    def pull_model_in_memory(self, s3_key):
+        """Download model from S3 and load directly into memory"""
+        try:
+            response = self.s3.get_object(Bucket=self.bucket_name, Key=s3_key)
+            model_bytes = response["Body"].read()
+            ext = os.path.splitext(s3_key)[-1].lower()
+
+            if ext in [".h5", ".keras"]:  # TensorFlow/Keras model
+                # Write to a temporary file
+                with tempfile.NamedTemporaryFile(suffix=ext) as tmp_file:
+                    tmp_file.write(model_bytes)
+                    tmp_file.flush()
+                    model = load_model(tmp_file.name)  # load from temp path
+                logging.info(f"Keras model loaded from S3 into memory: {s3_key}")
+
+            elif ext in [".pkl", ".joblib"]:  # sklearn/joblib models
+                model = joblib.load(io.BytesIO(model_bytes))
+                logging.info(f"Joblib model loaded from S3 into memory: {s3_key}")
+
+            else:
+                logging.error(f"Unsupported model format: {ext}")
+                return None
+
+            return model
+
+        except Exception as e:
+            logging.error(f"Failed to pull model in memory: {e}")
             raise CustomException(e, sys)
             #return None
 

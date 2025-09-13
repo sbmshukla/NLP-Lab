@@ -9,6 +9,7 @@ from nlplab.loggin.logger import logging
 from tensorflow.keras.models import load_model
 import h5py
 from nlplab.exception.exception import CustomException
+import tempfile
 class S3ModelManager:
     def __init__(self, access_key, secret_key, region, bucket_name):
         self.bucket_name = bucket_name
